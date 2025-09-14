@@ -6,3 +6,4 @@ gradio
 requests
 fastapi
 uvicorn
+timm
