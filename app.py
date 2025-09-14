@@ -2,8 +2,11 @@ import gradio as gr
 from transformers import pipeline
 from PIL import Image
 import requests
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.responses import JSONResponse
 import io
+import uvicorn
+from threading import Thread
 
 # -----------------------------
 # Load models (only once)
@@ -13,6 +16,11 @@ face_detector = pipeline("object-detection", model="facebook/detr-resnet-50")
 #nsfw_detector = pipeline("image-classification", model="Falconsai/nsfw_image_detection")
 #quality_checker = pipeline("image-classification", model="microsoft/swin-base-patch4-window7-224")
 #deepfake_detector = pipeline("image-classification", model="dima806/deepfake_vs_real_image_detection")
+
+# -----------------------------
+# FastAPI App
+# -----------------------------
+app = FastAPI(title="Matrimonial Image Validator API", version="1.0.0")
 
 # -----------------------------
 # Core validation function
@@ -77,6 +85,40 @@ def validate_matrimonial_image(image):
     return results
 
 # -----------------------------
+# REST API Endpoints
+# -----------------------------
+@app.get("/")
+async def root():
+    return {"message": "Matrimonial Image Validator API", "status": "running"}
+
+@app.post("/validate")
+async def validate_image(file: UploadFile = File(...)):
+    try:
+        # Validate file type
+        if not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="File must be an image")
+        
+        # Read and process image
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents))
+        
+        # Convert to RGB if necessary
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        
+        # Validate image
+        result = validate_matrimonial_image(image)
+        
+        return JSONResponse(content=result)
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "models_loaded": True}
+
+# -----------------------------
 # Gradio UI Wrapper
 # -----------------------------
 def gradio_validator(image):
@@ -86,6 +128,9 @@ def gradio_validator(image):
     else:
         return f"❌ Rejected: {result['reason']}"
 
+# -----------------------------
+# Create Gradio Interface
+# -----------------------------
 demo = gr.Interface(
     fn=gradio_validator,
     inputs=gr.Image(type="pil"),
@@ -95,22 +140,12 @@ demo = gr.Interface(
 )
 
 # -----------------------------
-# FastAPI JSON API
+# Mount Gradio to FastAPI
 # -----------------------------
-app = FastAPI()
-
-@app.post("/validate")
-async def api_validate(file: UploadFile = File(...)):
-    image = Image.open(io.BytesIO(await file.read())).convert("RGB")
-    result = validate_matrimonial_image(image)
-    return result
-
-# Mount Gradio inside FastAPI
 app = gr.mount_gradio_app(app, demo, path="/")
 
 # -----------------------------
-# Run locally (only needed if testing outside HF Spaces)
+# Launch the app
 # -----------------------------
-#if __name__ == "__main__":
-#    import uvicorn
-#    uvicorn.run(app, host="0.0.0.0", port=7860)
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=7860)
