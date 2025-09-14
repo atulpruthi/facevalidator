@@ -1,0 +1,8 @@
+transformers
+torch
+torchvision
+Pillow
+gradio
+requests
+fastapi
+uvicorn

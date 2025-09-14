@@ -1,0 +1,9 @@
+{
+  "face_detected": true,
+  "multiple_faces": false,
+  "not_human": false,
+  "nsfw": false,
+  "low_quality": false,
+  "deepfake": false,
+  "reason": "Valid matrimonial photo"
+}
