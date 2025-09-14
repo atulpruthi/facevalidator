@@ -110,6 +110,6 @@ app = gr.mount_gradio_app(app, demo, path="/")
 # -----------------------------
 # Run locally (only needed if testing outside HF Spaces)
 # -----------------------------
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=7860)
+#if __name__ == "__main__":
+#    import uvicorn
+#    uvicorn.run(app, host="0.0.0.0", port=7860)
