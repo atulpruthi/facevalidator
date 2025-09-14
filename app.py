@@ -9,10 +9,10 @@ import io
 # Load models (only once)
 # -----------------------------
 face_detector = pipeline("object-detection", model="facebook/detr-resnet-50")
-human_checker = pipeline("image-classification", model="microsoft/beit-base-patch16-224-pt22k")
-nsfw_detector = pipeline("image-classification", model="Falconsai/nsfw_image_detection")
-quality_checker = pipeline("image-classification", model="microsoft/swin-base-patch4-window7-224")
-deepfake_detector = pipeline("image-classification", model="dima806/deepfake_vs_real_image_detection")
+#human_checker = pipeline("image-classification", model="microsoft/beit-base-patch16-224-pt22k")
+#nsfw_detector = pipeline("image-classification", model="Falconsai/nsfw_image_detection")
+#quality_checker = pipeline("image-classification", model="microsoft/swin-base-patch4-window7-224")
+#deepfake_detector = pipeline("image-classification", model="dima806/deepfake_vs_real_image_detection")
 
 # -----------------------------
 # Core validation function
@@ -41,36 +41,37 @@ def validate_matrimonial_image(image):
         results["face_detected"] = True
     
     # 2. Human check
-    human_preds = human_checker(image)
-    human_label = max(human_preds, key=lambda x: x['score'])
-    if "cartoon" in human_label['label'].lower() or "anime" in human_label['label'].lower():
-        results["not_human"] = True
-        results["reason"] = "Not a real human photo"
-        return results
+    #human_preds = human_checker(image)
+    #human_label = max(human_preds, key=lambda x: x['score'])
+    #if "cartoon" in human_label['label'].lower() or "anime" in human_label['label'].lower():
+    #    results["not_human"] = True
+    #    results["reason"] = "Not a real human photo"
+    #    return results
     
     # 3. NSFW check
-    nsfw_preds = nsfw_detector(image)
-    nsfw_label = max(nsfw_preds, key=lambda x: x['score'])
-    if "nsfw" in nsfw_label['label'].lower() or "porn" in nsfw_label['label'].lower():
-        results["nsfw"] = True
-        results["reason"] = "NSFW / Nudity detected"
-        return results
+    #nsfw_preds = nsfw_detector(image)
+    #nsfw_label = max(nsfw_preds, key=lambda x: x['score'])
+    #if "nsfw" in nsfw_label['label'].lower() or "porn" in nsfw_label['label'].lower():
+    #    results["nsfw"] = True
+    #    results["reason"] = "NSFW / Nudity detected"
+    
+    #    return results
     
     # 4. Quality check
-    quality_preds = quality_checker(image)
-    bad_quality = max(quality_preds, key=lambda x: x['score'])
-    if "bad" in bad_quality['label'].lower() or "low" in bad_quality['label'].lower():
-        results["low_quality"] = True
-        results["reason"] = "Low-quality image"
-        return results
+    #quality_preds = quality_checker(image)
+    #bad_quality = max(quality_preds, key=lambda x: x['score'])
+    #if "bad" in bad_quality['label'].lower() or "low" in bad_quality['label'].lower():
+    #    results["low_quality"] = True
+    #    results["reason"] = "Low-quality image"
+    #    return results
     
     # 5. Deepfake detection
-    deepfake_preds = deepfake_detector(image)
-    deepfake_label = max(deepfake_preds, key=lambda x: x['score'])
-    if "fake" in deepfake_label['label'].lower():
-        results["deepfake"] = True
-        results["reason"] = "Deepfake / AI-generated face detected"
-        return results
+    #deepfake_preds = deepfake_detector(image)
+    #deepfake_label = max(deepfake_preds, key=lambda x: x['score'])
+    #if "fake" in deepfake_label['label'].lower():
+    #    results["deepfake"] = True
+    #    results["reason"] = "Deepfake / AI-generated face detected"
+    #    return results
     
     results["reason"] = "Valid matrimonial photo"
     return results
