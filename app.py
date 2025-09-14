@@ -8,11 +8,11 @@ import io
 # -----------------------------
 # Load models (only once)
 # -----------------------------
-face_detector = pipeline("object-detection", model="serengil/retinaface")
-human_checker = pipeline("image-classification", model="kadirnar/cartoon-vs-human-classification")
-nsfw_detector = pipeline("image-classification", model="nudenet/nudenet")
-quality_checker = pipeline("image-classification", model="uzair-ali/Image-Quality-Assessment")
-deepfake_detector = pipeline("image-classification", model="transformersbook/deepfake-detection")
+face_detector = pipeline("object-detection", model="facebook/detr-resnet-50")
+human_checker = pipeline("image-classification", model="microsoft/beit-base-patch16-224-pt22k")
+nsfw_detector = pipeline("image-classification", model="Falconsai/nsfw_image_detection")
+quality_checker = pipeline("image-classification", model="caidas/swin2SR-classical-sr-x2-64")
+deepfake_detector = pipeline("image-classification", model="dima806/deepfake_vs_real_image_detection")
 
 # -----------------------------
 # Core validation function
