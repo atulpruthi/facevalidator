@@ -142,7 +142,7 @@ demo = gr.Interface(
 # -----------------------------
 # Mount Gradio to FastAPI
 # -----------------------------
-app = gr.mount_gradio_app(app, demo, path="/")
+app = gr.mount_gradio_app(app, demo, path="/ui")
 
 # -----------------------------
 # Launch the app
