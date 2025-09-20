@@ -209,8 +209,10 @@ class NSFWValidator:
             weapon_label_mapping = {
                 'label_1': {'category': 'firearms', 'name': 'gun'},
                 'label_2': {'category': 'knives', 'name': 'knife'},
+                'label_3': {'category': 'human', 'name': 'human being'},
                 'LABEL_1': {'category': 'firearms', 'name': 'gun'},
                 'LABEL_2': {'category': 'knives', 'name': 'knife'},
+                'LABEL_3': {'category': 'human', 'name': 'human being'},
                 # Add more mappings if needed
                 'gun': {'category': 'firearms', 'name': 'gun'},
                 'knife': {'category': 'knives', 'name': 'knife'},
@@ -235,6 +237,11 @@ class NSFWValidator:
                     # Check if label matches our mapping
                     weapon_info = weapon_label_mapping.get(label)
                     if weapon_info:
+                        # Skip if this is classified as human, not a weapon
+                        if weapon_info['category'] == 'human':
+                            print(f"Human detected (not weapon): {label} with score {detection['score']}")
+                            continue
+                            
                         detected_weapons.append({
                             'category': weapon_info['category'],
                             'label': weapon_info['name'],
@@ -678,7 +685,7 @@ def validate_complete():
         nsfw_result = NSFWValidator.validate(temp_path)
         if nsfw_result['is_unsafe']:
             return jsonify({
-                'valid': False, 'reason': nsfw_result['reason'],
+                'valid': False, 'reason': "Please do not upload offensive/nudity content.",
                 'stage': 'nsfw_weapons_detection',
                 'nsfw_result': nsfw_result, 'user_id': user_id
             })
@@ -687,7 +694,7 @@ def validate_complete():
         deepfake_result = DeepfakeValidator.validate(temp_path)
         if deepfake_result['is_deepfake']:
             return jsonify({
-                'valid': False, 'reason': deepfake_result['reason'],
+                'valid': False, 'reason': "Please upload a real photo, deepfake images are not allowed.",
                 'stage': 'deepfake_detection',
                 'nsfw_result': nsfw_result, 'deepfake_result': deepfake_result,
                 'user_id': user_id
@@ -697,7 +704,7 @@ def validate_complete():
         pose_result = PoseValidator.validate(temp_path)
         if not pose_result['valid_pose']:
             return jsonify({
-                'valid': False, 'reason': pose_result['reason'],
+                'valid': False, 'reason': "Please upload a clear frontal face photo with proper pose.",
                 'stage': 'pose_validation',
                 'nsfw_result': nsfw_result, 'deepfake_result': deepfake_result,
                 'pose_result': pose_result, 'user_id': user_id
