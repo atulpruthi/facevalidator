@@ -6,6 +6,8 @@ import tempfile
 import io
 import base64
 import math
+import pickle
+import pathlib
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -14,6 +16,7 @@ import numpy as np
 import cv2
 import mediapipe as mp
 from transformers import pipeline
+from fastai.vision.all import *
 import logging
 
 # ==================== Configuration ====================
@@ -28,9 +31,13 @@ class Config:
     NSFW_THRESHOLD = 0.7
     DEEPFAKE_THRESHOLD = 0.7
     WEAPON_THRESHOLD = 0.5
+    CELEBRITY_THRESHOLD = 0.5
     FACE_CONFIDENCE_THRESHOLD = 0.7
     PERSON_DETECTION_THRESHOLD = 0.8
     MIN_PERSON_AREA = 5000
+    
+    # Model paths
+    CELEBRITY_MODEL_PATH = './models/celebrity-classifier.pkl'
 
 # ==================== Application Setup ====================
 app = Flask(__name__)
@@ -46,6 +53,7 @@ class ModelManager:
         self.nsfw_detector = None
         self.deepfake_detector = None
         self.weapons_detector = None
+        self.celebrity_classifier = None
         self._models_loaded = False
     
     def load_models(self):
@@ -56,6 +64,33 @@ class ModelManager:
             self.nsfw_detector = pipeline("image-classification", model="Falconsai/nsfw_image_detection")
             self.deepfake_detector = pipeline("image-classification", model="dima806/deepfake_vs_real_image_detection")
             self.weapons_detector = pipeline("object-detection", model="NabilaLM/detr-weapons-detection_40ep")
+            
+            # Load celebrity classifier with fastai
+            try:
+                if os.path.exists(Config.CELEBRITY_MODEL_PATH):
+                    # Fix for Windows path compatibility
+                    temp = pathlib.PosixPath
+                    pathlib.PosixPath = pathlib.WindowsPath
+                    
+                    # Method 1: Use load_learner (recommended)
+                    try:
+                        self.celebrity_classifier = load_learner(Config.CELEBRITY_MODEL_PATH)
+                        print("Celebrity classifier loaded successfully with load_learner")
+                    except:
+                        # Method 2: Use load_learner with Path
+                        self.celebrity_classifier = load_learner(Path(Config.CELEBRITY_MODEL_PATH))
+                        print("Celebrity classifier loaded successfully with load_learner and Path")
+                        
+                    # Restore original pathlib
+                    pathlib.PosixPath = temp
+                else:
+                    print(f"Warning: Celebrity classifier not found at {Config.CELEBRITY_MODEL_PATH}")
+                    self.celebrity_classifier = None
+            except Exception as celebrity_error:
+                print(f"Warning: Failed to load celebrity classifier: {str(celebrity_error)}")
+                print("Celebrity detection will be disabled. Other validations will continue to work.")
+                self.celebrity_classifier = None
+                
             self._models_loaded = True
             print("All models loaded successfully")
             return True
@@ -65,6 +100,7 @@ class ModelManager:
     
     @property
     def models_loaded(self):
+        # Core models are required, celebrity classifier is optional
         return self._models_loaded and all([
             self.face_detector, self.nsfw_detector, 
             self.deepfake_detector, self.weapons_detector
@@ -609,6 +645,65 @@ class PoseValidator:
                 'has_single_person': False, 'frontal_face': False, 'frontal_pose': False
             }
 
+# ==================== Celebrity Detection ====================
+class CelebrityValidator:
+    @staticmethod
+    def detect_celebrity(image_path):
+        """Detect if image contains a celebrity face"""
+        try:
+            if not model_manager.celebrity_classifier:
+                return {
+                    'is_celebrity': False,
+                    'celebrity_name': None,
+                    'confidence': 0.0,
+                    'reason': 'Celebrity classifier not loaded'
+                }
+            
+            # Load and preprocess image
+            pil_image = Image.open(image_path)
+            
+            # Convert to RGB if needed
+            if pil_image.mode != 'RGB':
+                pil_image = pil_image.convert('RGB')
+            
+            # Make prediction using fastai
+            try:
+                prediction, pred_idx, probs = model_manager.celebrity_classifier.predict(image_path)
+                
+                # Get the best class and its probability
+                best_class = model_manager.celebrity_classifier.dls.vocab[probs.argmax()]
+                best_prob = probs.max().item()
+                
+                # Check if confidence is above threshold
+                is_celebrity = best_prob > Config.CELEBRITY_THRESHOLD
+                
+                # Get celebrity name if detected
+                celebrity_name = str(best_class) if is_celebrity else None
+                
+                return {
+                    'is_celebrity': is_celebrity,
+                    'celebrity_name': celebrity_name,
+                    'confidence': float(best_prob),
+                    'reason': f'Celebrity detected: {celebrity_name}' if is_celebrity else 'No celebrity detected'
+                }
+                
+            except Exception as model_error:
+                print(f"Error in celebrity model prediction: {str(model_error)}")
+                return {
+                    'is_celebrity': False,
+                    'celebrity_name': None,
+                    'confidence': 0.0,
+                    'reason': f'Model prediction error: {str(model_error)}'
+                }
+                
+        except Exception as e:
+            return {
+                'is_celebrity': False,
+                'celebrity_name': None,
+                'confidence': 0.0,
+                'reason': f'Error in celebrity detection: {str(e)}'
+            }
+
 # ==================== Flask Routes ====================
 @app.route('/', methods=['GET'])
 def home():
@@ -623,6 +718,7 @@ def home():
             'POST /validate/nsfw': 'NSFW and weapons detection',
             'POST /validate/deepfake': 'Deepfake detection',
             'POST /validate/pose': 'Pose validation',
+            'POST /validate/celebrity': 'Celebrity detection',
             'POST /auth/token': 'Generate test token',
             'GET /health': 'Health check'
         },
@@ -638,7 +734,8 @@ def health_check():
             'face_detector': model_manager.face_detector is not None,
             'nsfw_detector': model_manager.nsfw_detector is not None,
             'deepfake_detector': model_manager.deepfake_detector is not None,
-            'weapons_detector': model_manager.weapons_detector is not None
+            'weapons_detector': model_manager.weapons_detector is not None,
+            'celebrity_classifier': model_manager.celebrity_classifier is not None
         }
     })
 
@@ -710,6 +807,18 @@ def validate_complete():
                 'pose_result': pose_result, 'user_id': user_id
             })
         
+        # Step 4: Celebrity detection (optional)
+        celebrity_result = CelebrityValidator.detect_celebrity(temp_path)
+        # Only check for celebrity if the classifier is available and detection succeeded
+        if celebrity_result.get('is_celebrity') and model_manager.celebrity_classifier is not None:
+            return jsonify({
+                'valid': False, 'reason': f"Celebrity detected. Please upload your own photo.",
+                'stage': 'celebrity_detection',
+                'nsfw_result': nsfw_result, 'deepfake_result': deepfake_result,
+                'pose_result': pose_result, 'celebrity_result': celebrity_result,
+                'user_id': user_id
+            })
+        
         # All validations passed
         return jsonify({
             'valid': True,
@@ -718,6 +827,7 @@ def validate_complete():
             'nsfw_result': nsfw_result,
             'deepfake_result': deepfake_result,
             'pose_result': pose_result,
+            'celebrity_result': celebrity_result,
             'user_id': user_id
         })
         
@@ -773,6 +883,24 @@ def validate_pose_only():
     try:
         temp_path = handle_file_upload()
         result = PoseValidator.validate(temp_path)
+        result['user_id'] = request.user.get('user_id')
+        return jsonify(result)
+    except ValidationError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': f'Internal server error: {str(e)}'}), 500
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
+
+@app.route('/validate/celebrity', methods=['POST'])
+@require_auth
+def validate_celebrity_only():
+    """Celebrity detection only"""
+    temp_path = None
+    try:
+        temp_path = handle_file_upload()
+        result = CelebrityValidator.detect_celebrity(temp_path)
         result['user_id'] = request.user.get('user_id')
         return jsonify(result)
     except ValidationError as e:
