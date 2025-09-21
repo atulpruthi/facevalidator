@@ -1,3 +1,5 @@
+flask
+werkzeug
 transformers
 torch
 torchvision
@@ -8,3 +10,9 @@ fastapi
 uvicorn
 timm
 mediapipe
+PyJWT
+opencv-python
+fastai
+scikit-learn
+numpy
+pandas
